@@ -3,10 +3,6 @@ global.__basedir = __dirname;
 
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-const { readdir, readFile } = require('fs').promises;
-const axios = require('axios');
-
-const path = require('path');
 const app = express();
 
 const db = new sqlite3.Database('laser_data.db');
@@ -25,21 +21,6 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 let chartRetrievalInProgress = false;
-
-app.use((req, res, next) => {
-  next();
-  // const secret = req.headers['x-secret-key'] || req.query.secret_key;
-  
-  // if (!secret) {
-  //     return res.status(401).json({ message: 'No secret key provided' });
-  // }
-
-  //   if (secret !== process.env.API_SECRET) {
-  //     return res.status(403).json({ message: 'Invalid secret key' });
-  // }
-
-  // next();
-});
 
 app.set('view engine', 'ejs');
 app.use(express.json());
@@ -174,121 +155,6 @@ app.get('/charting', async (req, res) => {
     res.status(500).send({ result: false, error: error.message });
   }
 });
-
-
-// app.get('/getChart', async (req, res) => {
-//   try {
-//     if (chartRetrievalInProgress) { throw new Error('Chart retrieval already in progress'); }
-//     chartRetrievalInProgress = true;
-//     const { startDate, endDate, asImgTag } = req.query;
-//     const combinedData = await getCombinedData(db, startDate, endDate, {
-//       enumerateXML,
-//       getLaserData,
-//       getNitrogenTelemetry,
-//     });
-
-//     const chartData = formatChartData(combinedData);
-//     const chartImageUrl = generateQuickChartUrl(chartData);
-
-//     const chartImageResponse = await axios.get(chartImageUrl, {
-//       responseType: 'arraybuffer',
-//     });
-
-//     if (asImgTag && asImgTag.toLowerCase() === 'true') {
-//       const base64Image = Buffer.from(chartImageResponse.data, 'binary').toString('base64');
-//       res.send(`<img src="data:image/png;base64,${base64Image}" />`);
-//     } else {
-//       res.contentType('image/png');
-//       res.send(chartImageResponse.data);
-//     }
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send({ result: false, error: error.message });
-//   } finally {
-//     chartRetrievalInProgress = false;
-//   }
-// });
-
-function formatChartData(data) {
-  const labels = data.map((entry) => entry.date);
-  const nitrogenTankLevelData = data.map((entry) => entry.nitrogen_tank_level);
-  const avgTemperatureData = data.map((entry) => entry.average_temperature);
-  const totalLaserCourseCutTimeData = data.map(
-    (entry) => entry.total_course_cut_time,
-  );
-  const totalLaserPierceTimeData = data.map(
-    (entry) => entry.total_pierce_time || 0, // Assign 0 if the field does not exist
-  );
-
-  return {
-    labels,
-    datasets: [
-      {
-        label: 'Nitrogen Tank Level',
-        data: nitrogenTankLevelData,
-        borderColor: 'blue',
-      },
-      {
-        label: 'Average Temperature',
-        data: avgTemperatureData,
-        borderColor: 'red',
-      },
-      {
-        label: 'Total Laser Course Cut Time',
-        data: totalLaserCourseCutTimeData,
-        borderColor: 'green',
-      },
-      {
-        label: 'Total Laser Pierce Time',
-        data: totalLaserPierceTimeData,
-        borderColor: 'purple',
-      },
-    ],
-  };
-}
-
-function generateQuickChartUrl(chartData) {
-  const chartConfig = {
-    type: 'line',
-    data: chartData,
-    options: {
-      scales: {
-        xAxes: [
-          {
-            type: 'time',
-            time: {
-              unit: 'day',
-            },
-          },
-        ],
-        yAxes: [
-          {
-            id: 'y1',
-            type: 'linear',
-            position: 'left',
-          },
-          {
-            id: 'y2',
-            type: 'linear',
-            position: 'right',
-            gridLines: {
-              drawOnChartArea: false,
-            },
-          },
-        ],
-      },
-    },
-  };
-
-  // Assign the y-axis to the datasets
-  chartConfig.data.datasets[0].yAxisID = 'y1';
-  chartConfig.data.datasets[1].yAxisID = 'y1';
-  chartConfig.data.datasets[2].yAxisID = 'y2';
-  chartConfig.data.datasets[3].yAxisID = 'y2';
-
-  const chartConfigString = encodeURIComponent(JSON.stringify(chartConfig));
-  return `https://quickchart.io/chart?c=${chartConfigString}`;
-}
 
 app.listen(3000, () => {
   console.log('WiseTelemetryReport app Listening on port 3000');
