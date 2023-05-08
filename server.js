@@ -152,7 +152,7 @@ app.get('/charting', async (req, res) => {
     res.render('chart', { data: combinedData });
   } catch (error) {
     console.error(error);
-    res.status(500).send({ result: false, error: error.message, details: JSON.stringify(error) });
+    res.status(500).send({ result: false, error: error.message, details: JSON.stringify(err, Object.getOwnPropertyNames(error)) });
   }
 });
 
