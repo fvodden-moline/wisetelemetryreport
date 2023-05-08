@@ -1,6 +1,8 @@
 async function getLaserData(db, startDate, endDate) {
+  console.info(`Retrieving laser data from ${startDate} to ${endDate}`)
+  
   const rows = await db.asyncAll(`
-    SELECT * FROM data
+    SELECT * FROM laser_data
     WHERE strftime('%Y-%m-%d', startDateTime) >= strftime('%Y-%m-%d', ?)
       AND strftime('%Y-%m-%d', endDateTime) <= strftime('%Y-%m-%d', ?)
   `, [startDate, endDate]);   

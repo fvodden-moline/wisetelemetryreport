@@ -6,14 +6,12 @@ async function getCombinedData(db, startDate, endDate, {
   getLaserData,
   getNitrogenTelemetry
 }) {
-  const adjustedStartDate = DateTime.fromFormat(startDate, 'yyyy-MM-dd').minus({ days: 1 }).toFormat('yyyy-MM-dd');
-
+  console.info(`Combining data for ${startDate} to ${endDate}`)
   await enumerateXML(db, process.env.XML_MONITOR_DIRECTORY);
   const getLaserDataResponse = await getLaserData(db, startDate, endDate);
-  const getNitrogenTelemetryResponse = await getNitrogenTelemetry(adjustedStartDate, endDate);
+  const getNitrogenTelemetryResponse = await getNitrogenTelemetry(db, startDate, endDate);
   
   // Remove the first entry from the nitrogen telemetry data
-  getNitrogenTelemetryResponse.shift();
   const combinedData = [];
 
   // get temperatures for date range
@@ -29,9 +27,6 @@ async function getCombinedData(db, startDate, endDate, {
     const totalMoveTime = laserDataOnDate.reduce((acc, record) => acc + record.moveTime, 0);
     const totalWaitTime = laserDataOnDate.reduce((acc, record) => acc + record.waitTime, 0);
 
-    // const weatherData = visualCrossingResponse.data.days.find(day => day.datetime === date);
-    // const averageTemperature = weatherData ? weatherData.temp : null;
-
     combinedData.push({
       date,
       nitrogen_delta: nitrogenData.delta,
@@ -41,7 +36,7 @@ async function getCombinedData(db, startDate, endDate, {
       total_pierce_time: totalPierceTime,
       total_move_time: totalMoveTime,
       total_wait_time: totalWaitTime,
-      average_temperature: 0
+      average_temperature: nitrogenData.temperature
     });
     
   });

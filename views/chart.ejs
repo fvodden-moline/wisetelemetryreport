@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.3.0/luxon.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-1.13.4/sl-1.6.2/datatables.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+  <script src="https://cdn.datatables.net/v/dt/dt-1.13.4/sl-1.6.2/datatables.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1 class="is-size-2">Nitrogen Use Analysis</h1>
+    
+    <section class="section">
+      <div class="container">
+          <div class="field">
+              <div class="columns is-multiline">
+                  <div class="column is-narrow">
+                      <label class="label" for="fromDate">From</label>
+                      <div class="control">
+                          <input class="input" type="text" id="fromDate" readonly>
+                      </div>
+                  </div>
+                  <div class="column is-narrow">
+                      <label class="label" for="toDate">To</label>
+                      <div class="control">
+                          <input class="input" type="text" id="toDate" readonly>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+    </section>
+
+    <div class="section">
+      <canvas id="myChart"></canvas>
+    </div>
+    <div class="section">
+    <table id="resultsTable" class="display">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Nitrogen Delta (in)</th>
+          <th>Nitrogen Tank Level (in)</th>
+          <th>Total Laser Run Time</th>
+          <th>Total Course Cut Time</th>
+          <th>Total Move Time</th>
+          <th>Total Wait Time</th>
+          <th>Average Temperature (°F)</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const data = <%- JSON.stringify(data) %>;
+  </script>
+  <script src="scripts/chart-scripts.js"></script>
+</body>
+</html>

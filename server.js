@@ -41,8 +41,9 @@ app.use((req, res, next) => {
   // next();
 });
 
+app.set('view engine', 'ejs');
 app.use(express.json());
-app.use('/ui', express.static('public/reporting-ui'));
+app.use('/scripts', express.static('views/scripts'));
 
 db.asyncRun = util.promisify(db.run);
 db.asyncGet = util.promisify(db.get);
@@ -50,8 +51,13 @@ db.asyncAll = util.promisify(db.all);
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS processed_files (id INTEGER PRIMARY KEY, filename TEXT)`);
-  db.run(`CREATE TABLE IF NOT EXISTS data (id INTEGER PRIMARY KEY, programName TEXT, laserProcessName TEXT, startDateTime DATETIME, endDateTime DATETIME, processTime INTEGER, courseCuttime INTEGER, pierceTime INTEGER, moveTime INTEGER, waitTime INTEGER)`);
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS unique_dates ON data (startDateTime, endDateTime)`);
+  db.run(`CREATE TABLE IF NOT EXISTS laser_data (id INTEGER PRIMARY KEY, programName TEXT, laserProcessName TEXT, startDateTime DATETIME, endDateTime DATETIME, processTime INTEGER, courseCuttime INTEGER, pierceTime INTEGER, moveTime INTEGER, waitTime INTEGER)`);
+  db.run(`CREATE TABLE IF NOT EXISTS telemetry_data (date DATETIME PRIMARY KEY, tank_level INTEGER, delta INTEGER, temperature REAL);`);
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS unique_dates ON laser_data (startDateTime, endDateTime)`);
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/charting');
 });
 
 app.post('/enumerateXML', async (req, res) => {
@@ -82,7 +88,7 @@ app.get('/getNitrogenTelemetry', async (req, res) => {
   const { startDate, endDate } = req.query;
 
   try {
-    const data = await getNitrogenTelemetry(startDate, endDate);
+    const data = await getNitrogenTelemetry(db, startDate, endDate);
     res.json({ result: true, data });
   } catch (err) {
     console.error(err);
@@ -102,6 +108,7 @@ app.get('/getCombinedData', async (req, res) => {
 
     res.send({ result: true, data: combinedData });
   } catch (error) {
+    console.error(error);
     res.status(500).send({ result: false, error: error.message });
   }
 });
@@ -140,38 +147,67 @@ app.post('/syncWithSharePoint', async (req, res) => {
   }
 });
 
-app.get('/getChart', async (req, res) => {
+app.get('/charting', async (req, res) => {
   try {
-    if (chartRetrievalInProgress) { throw new Error('Chart retrieval already in progress'); }
-    chartRetrievalInProgress = true;
-    const { startDate, endDate, asImgTag } = req.query;
+    let { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      // If either startDate or endDate is missing, use the default range of the last month
+      const now = DateTime.local();
+      endDate = endDate || now.toFormat('yyyy-MM-dd'); // Default endDate to today
+      
+      const oneMonthAgo = now.minus({ months: 1 });
+      startDate = startDate || oneMonthAgo.toFormat('yyyy-MM-dd'); // Default startDate to one month ago
+
+      return res.redirect(`/charting?startDate=${startDate}&endDate=${endDate}`);
+    }
+
     const combinedData = await getCombinedData(db, startDate, endDate, {
       enumerateXML,
       getLaserData,
       getNitrogenTelemetry,
     });
 
-    const chartData = formatChartData(combinedData);
-    const chartImageUrl = generateQuickChartUrl(chartData);
-
-    const chartImageResponse = await axios.get(chartImageUrl, {
-      responseType: 'arraybuffer',
-    });
-
-    if (asImgTag && asImgTag.toLowerCase() === 'true') {
-      const base64Image = Buffer.from(chartImageResponse.data, 'binary').toString('base64');
-      res.send(`<img src="data:image/png;base64,${base64Image}" />`);
-    } else {
-      res.contentType('image/png');
-      res.send(chartImageResponse.data);
-    }
+    res.render('chart', { data: combinedData });
   } catch (error) {
     console.error(error);
     res.status(500).send({ result: false, error: error.message });
-  } finally {
-    chartRetrievalInProgress = false;
   }
 });
+
+
+// app.get('/getChart', async (req, res) => {
+//   try {
+//     if (chartRetrievalInProgress) { throw new Error('Chart retrieval already in progress'); }
+//     chartRetrievalInProgress = true;
+//     const { startDate, endDate, asImgTag } = req.query;
+//     const combinedData = await getCombinedData(db, startDate, endDate, {
+//       enumerateXML,
+//       getLaserData,
+//       getNitrogenTelemetry,
+//     });
+
+//     const chartData = formatChartData(combinedData);
+//     const chartImageUrl = generateQuickChartUrl(chartData);
+
+//     const chartImageResponse = await axios.get(chartImageUrl, {
+//       responseType: 'arraybuffer',
+//     });
+
+//     if (asImgTag && asImgTag.toLowerCase() === 'true') {
+//       const base64Image = Buffer.from(chartImageResponse.data, 'binary').toString('base64');
+//       res.send(`<img src="data:image/png;base64,${base64Image}" />`);
+//     } else {
+//       res.contentType('image/png');
+//       res.send(chartImageResponse.data);
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send({ result: false, error: error.message });
+//   } finally {
+//     chartRetrievalInProgress = false;
+//   }
+// });
 
 function formatChartData(data) {
   const labels = data.map((entry) => entry.date);
@@ -254,4 +290,6 @@ function generateQuickChartUrl(chartData) {
   return `https://quickchart.io/chart?c=${chartConfigString}`;
 }
 
-app.listen(3000);
+app.listen(3000, () => {
+  console.log('WiseTelemetryReport app Listening on port 3000');
+});

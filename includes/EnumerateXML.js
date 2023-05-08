@@ -10,9 +10,10 @@ const parseXML = (data) => new Promise((resolve, reject) => {
 
 async function enumerateXML(db, dirPath) {
   if (!path.isAbsolute(dirPath)) dirPath = path.resolve(global.__basedir, process.env.XML_MONITOR_DIRECTORY);
-
+  
+  console.info(`Checking for XML files in ${dirPath}`)
   const files = await readdir(dirPath);
-  const xmlFiles = files.filter(file => path.extname(file) === '.xml');
+  const xmlFiles = files.filter(file => /^ResultSheet/.test(file)).filter(file => path.extname(file) === '.xml');
   const processedPromises = xmlFiles.map(async (file) => {
     const row = await db.asyncGet('SELECT * FROM processed_files WHERE filename = ?', [file]);
     if (!row) {
@@ -27,7 +28,7 @@ async function enumerateXML(db, dirPath) {
         const endDateTime = DateTime.fromFormat(row.$.endDateTime, "yyyy/MM/dd HH:mm:ss").toFormat("yyyy-MM-dd HH:mm:ss");
         const laserProcessName = row.$.laserProcessName || 'None';
         try {
-          await db.asyncRun(`INSERT INTO data (programName, laserProcessName, startDateTime, endDateTime, processTime, courseCuttime, moveTime, pierceTime, waitTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [row.$.programName, laserProcessName,  startDateTime, endDateTime, parseInt(row.$.processTime), parseInt(row.$.courseCuttime), parseInt(row.$.pierceTime), parseInt(row.$.moveTime), parseInt(row.$.waitTime)]);
+          await db.asyncRun(`INSERT INTO laser_data (programName, laserProcessName, startDateTime, endDateTime, processTime, courseCuttime, moveTime, pierceTime, waitTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [row.$.programName, laserProcessName,  startDateTime, endDateTime, parseInt(row.$.processTime), parseInt(row.$.courseCuttime), parseInt(row.$.pierceTime), parseInt(row.$.moveTime), parseInt(row.$.waitTime)]);
           console.info(`Inserted ${row.$.programName} into database`);
         } catch (e) {
           if (e && e.code === 'SQLITE_CONSTRAINT') {
