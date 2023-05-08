@@ -1,11 +1,14 @@
 // index.js
 global.__basedir = __dirname;
 
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
 
-const db = new sqlite3.Database('laser_data.db');
+const db = new sqlite3.Database(process.env.DATABASE_PATH);
 const util = require('util');
 
 const { DateTime } = require('luxon');
@@ -16,9 +19,6 @@ const getNitrogenTelemetry = require('./includes/GetNitrogenTelemetry');
 const getCombinedData = require('./includes/GetCombinedData');
 const syncWithSharePoint = require('./includes/SyncWithSharePoint');
 const getAccessToken = require('./includes/GetAccessToken');
-
-const dotenv = require('dotenv');
-dotenv.config();
 
 let chartRetrievalInProgress = false;
 
