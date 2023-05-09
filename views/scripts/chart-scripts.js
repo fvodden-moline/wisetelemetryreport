@@ -139,10 +139,7 @@ $(document).ready(function () {
         x: {
           type: 'time',
           time: {
-            unit: 'day',
-            displayFormats: {
-              day: 'MMM dd'
-            }
+            unit: 'day'
           }
         },
         y1: {
@@ -157,9 +154,8 @@ $(document).ready(function () {
       plugins: {
         tooltip: {
           callbacks: {
-            title: function(context) {      
-     
-              return DateTime.fromSeconds(context[0].parsed.x).toFormat('MMM dd');              
+            title: function(context) {     
+              return DateTime.fromMillis(context[0].parsed.x).toFormat('MMM dd');
             },
             label: function(context) {
               const dataset = context.dataset;

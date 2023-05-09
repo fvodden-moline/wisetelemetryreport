@@ -26,9 +26,8 @@ async function getNitrogenTelemetry(db, startDate, endDate) {
         missingDate.endDate
       );
 
-      console.info(`Fetching weather data for ${missingDate.startDate} to ${missingDate.endDate}`);
-      const visualCrossingResponse = await axios.get(`https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${process.env.VISUAL_CROSSING_LATITUDE}%2C${process.env.VISUAL_CROSSING_LONGITUDE}/${missingDate.startDate}/${missingDate.endDate}?unitGroup=us&key=${process.env.VISUAL_CROSSING_API_KEY}&include=obs`);
-
+      console.info(`Fetching weather data for ${missingDate.adjustedStartDate} to ${endDate}`);
+      const visualCrossingResponse = await axios.get(`https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${process.env.VISUAL_CROSSING_LATITUDE}%2C${process.env.VISUAL_CROSSING_LONGITUDE}/${adjustedStartDate}/${missingDate.endDate}?unitGroup=us&key=${process.env.VISUAL_CROSSING_API_KEY}&include=obs`);
       // Cache the newly fetched data in the database
       for (let data of report) {
         try {
