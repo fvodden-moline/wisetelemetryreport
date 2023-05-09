@@ -76,7 +76,7 @@ $(document).ready(function () {
 
     return false;
   });
-
+  
   // Initialize the chart
   const ctx = document.getElementById('myChart').getContext('2d');
   const chart = new Chart(ctx, {
@@ -106,7 +106,8 @@ $(document).ready(function () {
           yAxisID: 'y1',
           borderColor: 'green',
           borderWidth: 1,
-          fill: false
+          fill: true,
+          backgroundColor: 'rgba(0, 128, 0, 0.2)'
         },
         {
           label: 'Total Pierce Time',
@@ -114,7 +115,8 @@ $(document).ready(function () {
           yAxisID: 'y1',
           borderColor: 'purple',
           borderWidth: 1,
-          fill: false
+          fill: true,
+          backgroundColor: 'rgba(128, 0, 128, 0.2)'
         },
         {
           label: 'Total Run Time',
@@ -122,7 +124,8 @@ $(document).ready(function () {
           yAxisID: 'y1',
           borderColor: 'orange',
           borderWidth: 1,
-          fill: false
+          fill: true,
+          backgroundColor: 'rgba(255, 165, 0, 0.2)'          
         },
         {
           label: 'Total Move Time',
@@ -130,7 +133,8 @@ $(document).ready(function () {
           yAxisID: 'y1',
           borderColor: 'brown',
           borderWidth: 1,
-          fill: false
+          fill: true,
+          backgroundColor: 'rgba(165, 42, 42, 0.2)'
         }
       ]
     },
@@ -144,11 +148,19 @@ $(document).ready(function () {
         },
         y1: {
           type: 'linear',
-          position: 'left'
+          position: 'left',
+          title: {
+            display: true,
+            text: 'Nitrogen Tank Level / Run Times (min)'
+          }
         },
         y2: {
           type: 'linear',
-          position: 'right'
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Average Temperature (°F)'
+          }
         }
       },
       plugins: {
