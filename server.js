@@ -40,7 +40,9 @@ db.serialize(() => {
 });
 
 app.get('/', (req, res) => {
-  res.redirect('/charting');
+  const basePath = getBasePath(req);
+  const redirectTo = `${basePath}/charting`;
+  return res.redirect(redirectTo);      
 });
 
 app.post('/enumerateXML', async (req, res) => {
