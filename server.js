@@ -20,7 +20,9 @@ const getCombinedData = require('./includes/GetCombinedData');
 const syncWithSharePoint = require('./includes/SyncWithSharePoint');
 const getAccessToken = require('./includes/GetAccessToken');
 
-let chartRetrievalInProgress = false;
+function getBasePath(req) {
+  return req.header('X-Forwarded-Prefix') || '';
+}
 
 app.set('view engine', 'ejs');
 app.use(express.json());
@@ -140,7 +142,9 @@ app.get('/charting', async (req, res) => {
       const oneMonthAgo = now.minus({ months: 1 });
       startDate = startDate || oneMonthAgo.toFormat('yyyy-MM-dd'); // Default startDate to one month ago
 
-      return res.redirect(`/charting?startDate=${startDate}&endDate=${endDate}`);
+      const basePath = getBasePath(req);
+      const redirectTo = `${basePath}/charting?startDate=${startDate}&endDate=${endDate}`;
+      return res.redirect(redirectTo);      
     }
 
     const combinedData = await getCombinedData(db, startDate, endDate, {
