@@ -3,6 +3,7 @@ WORKDIR /usr/src/app
 RUN apt-get -y update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
+    chromium \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -39,8 +40,14 @@ RUN apt-get -y update && \
     xdg-utils && \
     rm -rf /var/lib/apt/lists/*
 
+# Use the chromium installed above instead of letting puppeteer download its own
+# at install time. --foreground-scripts streams install-script output so a stalled
+# postinstall names itself instead of hanging silently.
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 COPY package*.json ./
-RUN npm install
+RUN npm install --foreground-scripts
 COPY . .
 EXPOSE 3000
 CMD [ "node", "server.js" ]
