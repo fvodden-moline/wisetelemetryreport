@@ -1,17 +1,19 @@
-FROM node:16
+FROM node:20-bookworm
 WORKDIR /usr/src/app
 RUN apt-get -y update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
     fonts-liberation \
-    gconf-service \
-    libappindicator1 \ 
     libasound2 \
+    libatk-bridge2.0-0 \
     libatk1.0-0 \
     libcairo2 \
     libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
     libfontconfig1 \
-    libgbm-dev \
-    libgdk-pixbuf2.0-0 \
+    libgbm1 \
+    libglib2.0-0 \
     libgtk-3-0 \
     libicu-dev \
     libjpeg-dev \
@@ -29,11 +31,13 @@ RUN apt-get -y update && \
     libxext6 \
     libxfixes3 \
     libxi6 \
+    libxkbcommon0 \
     libxrandr2 \
     libxrender1 \
     libxss1 \
     libxtst6 \
-    xdg-utils
+    xdg-utils && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm install
