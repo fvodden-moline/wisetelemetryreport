@@ -35,6 +35,7 @@ const ready = (async () => {
   await db.asyncRun(`CREATE TABLE IF NOT EXISTS laser_data (id INTEGER PRIMARY KEY, programName TEXT, laserProcessName TEXT, startDateTime DATETIME, endDateTime DATETIME, processTime INTEGER, courseCuttime INTEGER, pierceTime INTEGER, moveTime INTEGER, waitTime INTEGER)`);
   await db.asyncRun(`CREATE TABLE IF NOT EXISTS telemetry_data (date DATETIME PRIMARY KEY, tank_level INTEGER, delta INTEGER, temperature REAL);`);
   await db.asyncRun(`CREATE UNIQUE INDEX IF NOT EXISTS unique_dates ON laser_data (startDateTime, endDateTime)`);
+  await getNitrogenTelemetry.migrate(db);
   await dependencyStatus.init(db);
 })();
 ready.catch(err => console.error(`Database setup failed: ${describeError(err)}`));

@@ -4,16 +4,49 @@ const { describeError } = require('./Errors');
 const dependencyStatus = require('./DependencyStatus');
 const { fillMissingTemperatures } = require('./GetWeather');
 
-// Tank levels per day, cached in telemetry_data. Days not cached yet are fetched from the WISE
-// Telemetry portal; temperatures are filled separately (GetWeather), so a weather fault no longer
-// stops the tank levels from being stored. Faults are added to `notices` for the page to show;
-// the cached days are returned either way.
+// A day fetched before it was over holds a partial reading. It stays provisional and is fetched
+// again (at most once per REFRESH_MS, so page views do not each sign in to WISE) until a fetch
+// lands FINAL_AFTER past the end of the day. fetched_at is when the row was last downloaded.
+const FINAL_AFTER = { days: 1, hours: 2 };
+const REFRESH_MS = 60 * 60 * 1000;
+let lastProvisionalRefresh = 0;
+
+function isProvisional(row, now) {
+  const day = DateTime.fromFormat(row.date, 'yyyy-MM-dd HH:mm:ss');
+  if (!row.fetched_at) {
+    // rows cached before fetched_at existed: only the last two days can still be partial
+    return day >= now.startOf('day').minus({ days: 1 });
+  }
+  return DateTime.fromISO(row.fetched_at) < day.plus(FINAL_AFTER);
+}
+
+// Adds telemetry_data.fetched_at to a database created before it existed.
+async function migrate(db) {
+  const columns = await db.asyncAll('PRAGMA table_info(telemetry_data)');
+  if (!columns.some(c => c.name === 'fetched_at')) {
+    await db.asyncRun('ALTER TABLE telemetry_data ADD COLUMN fetched_at TEXT');
+  }
+}
+
+// Tank levels per day, cached in telemetry_data. Days not cached yet, and provisional days (see
+// above), are fetched from the WISE Telemetry portal; temperatures are filled separately
+// (GetWeather), so a weather fault does not stop the tank levels from being stored. Faults are
+// added to `notices` for the page to show; the cached days are returned either way.
 async function getNitrogenTelemetry(db, startDate, endDate, notices = []) {
   console.info(`Fetching nitrogen telemetry data from ${startDate} to ${endDate}`);
   const selectQuery = "SELECT date, tank_level, delta, temperature FROM telemetry_data WHERE strftime('%Y-%m-%d', date) >= strftime('%Y-%m-%d', ?) AND strftime('%Y-%m-%d', date) <= strftime('%Y-%m-%d', ?) ORDER BY date ASC";
-  const rows = await db.asyncAll(selectQuery, [startDate, endDate]);
+  const rows = await db.asyncAll(selectQuery.replace('temperature FROM', 'temperature, fetched_at FROM'), [startDate, endDate]);
 
-  const missingDates = getMissingDates(rows, startDate, endDate);
+  const now = DateTime.local();
+  let settled = rows;
+  if (Date.now() - lastProvisionalRefresh >= REFRESH_MS) {
+    settled = rows.filter(row => !isProvisional(row, now));
+    if (settled.length < rows.length) {
+      lastProvisionalRefresh = Date.now();
+      console.info(`Refreshing ${rows.length - settled.length} provisional day(s)`);
+    }
+  }
+  const missingDates = getMissingDates(settled, startDate, endDate);
 
   if (missingDates.length > 0) {
     const reportGenerator = new WiseTelemetryReport(
@@ -43,13 +76,26 @@ async function getNitrogenTelemetry(db, startDate, endDate, notices = []) {
       }
       await dependencyStatus.record('wise-telemetry', true, Date.now() - started, `${report.length} reading(s) for ${adjustedStartDate} to ${missingDate.endDate}`);
 
+      const fetchedAt = DateTime.local().toISO();
       for (const data of report) {
         const formattedDateTime = DateTime.fromFormat(data.date, 'yyyy-MM-dd').toFormat('yyyy-MM-dd HH:mm:ss');
         try {
-          await db.asyncRun('INSERT INTO telemetry_data (date, tank_level, delta, temperature) VALUES (?, ?, ?, NULL)', [formattedDateTime, data.tank_level, data.delta]);
+          if (data.date >= missingDate.startDate) {
+            // a requested day: insert, or replace a provisional reading. Its temperature is cleared
+            // so GetWeather fills it again from the full day.
+            await db.asyncRun(
+              `INSERT INTO telemetry_data (date, tank_level, delta, temperature, fetched_at) VALUES (?, ?, ?, NULL, ?)
+               ON CONFLICT(date) DO UPDATE SET tank_level = excluded.tank_level, delta = excluded.delta,
+                 temperature = NULL, fetched_at = excluded.fetched_at`,
+              [formattedDateTime, data.tank_level, data.delta, fetchedAt]);
+          } else {
+            // the extra day before the range, fetched only to compute the first delta: never overwrite
+            await db.asyncRun('INSERT OR IGNORE INTO telemetry_data (date, tank_level, delta, temperature, fetched_at) VALUES (?, ?, ?, NULL, ?)',
+              [formattedDateTime, data.tank_level, data.delta, fetchedAt]);
+          }
           console.info(`Cached tank level for ${data.date}`);
         } catch (err) {
-          if (!(err && err.code === 'SQLITE_CONSTRAINT')) console.error(`Could not cache ${data.date}: ${err.message}`);
+          console.error(`Could not cache ${data.date}: ${err.message}`);
         }
       }
     }
@@ -116,3 +162,5 @@ function getMissingDates(rows, startDate, endDate) {
 }
 
 module.exports = getNitrogenTelemetry;
+module.exports.migrate = migrate;
+module.exports.isProvisional = isProvisional;
