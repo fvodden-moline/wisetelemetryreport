@@ -1,2 +1,12 @@
-node_modules
-npm-debug.log
+# Allow-list: the image gets only what the Dockerfile needs. Everything else stays out, in particular
+# .env files (credentials), *.db, the xml folder, .git and logs.
+*
+!package.json
+!package-lock.json
+!server.js
+!includes/**
+!views/**
+**/node_modules
+**/.env*
+**/*.db
+**/*.log

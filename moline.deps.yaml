@@ -1,0 +1,57 @@
+# moline.deps.yaml — wisetelemetryreport (laserreporting: nitrogen use vs laser run time)
+# Schema: C:\Github\moline-agents\schema\moline.deps.yaml.md
+# Started 2026-11-20 from moline-agents/drafts/wisetelemetryreport.moline.deps.yaml (empty: no Epicor calls),
+# filled from the code. No Epicor, no other Moline app. Microsoft Graph / SharePoint sync removed (owner, 2026-11-20).
+repo: wisetelemetryreport
+name: Laser Reporting
+owner: fvodden@moline.com
+description: >
+  Small Node/Express web page (laserreporting) that charts daily nitrogen use of the laser against laser run
+  time and outside temperature. Laser run times are read from the RADAN "Laser Report" ResultSheet*.xml files on
+  a file share; nitrogen tank levels are downloaded from the WISE Telemetry portal (Chromium/Puppeteer sign-in,
+  then an Excel export); daily average temperature comes from Visual Crossing. Everything is cached in SQLite, so
+  each day is fetched once. Light use, internal only (tailnet), no sign-in.
+runtime:
+  kind: web-app
+  hosts: [apps-prod]
+  epicor_env: none
+  environments:
+    - name: prod
+      host: apps-prod
+      urls:
+        internal: https://laserreporting.molapps.net
+      health:
+        live: /health
+        deep: /health/deep
+      epicor_env: none
+      data:
+        - { mount: /data, size: 1GB, note: "data.db (SQLite: laser runs, tank levels, temperatures, last third-party call results); ~0.6 MB in 2026-11" }
+      file_shares:
+        - { share: RADAN Laser Report, mount: /xml, mode: ro, note: "ResultSheet*.xml, read with readdir/readFile only" }
+
+consumes:
+  epicor: []
+  apps: []
+  external:
+    - service: WISE Telemetry portal (portal.wisetelemetry.com)
+      id: wise-telemetry
+      purpose: nitrogen tank level readings (browser sign-in through Puppeteer, then the condensed Excel export)
+      via: includes/WiseTelemetryReport.js, includes/GetNitrogenTelemetry.js
+      breaks_if: login form fields (username/password/submit) or the /download/device/excel/condensed export (Timestamp, "Channel 1 (in)" columns) change
+      auth: env WISE_TELEMETRY_USERNAME, WISE_TELEMETRY_PASSWORD, WISE_TELEMETRY_ACCOUNT_ID, WISE_TELEMETRY_DEVICE_ID (Hub, wisetelemetryreport\prod)
+    - service: Visual Crossing weather API
+      id: visual-crossing
+      purpose: daily average temperature at the plant
+      via: includes/GetWeather.js
+      breaks_if: timeline API response days[].datetime / days[].temp change; daily record allowance exceeded (HTTP 429)
+      auth: env VISUAL_CROSSING_API_KEY (Hub, wisetelemetryreport\prod)
+
+provides:
+  apis:
+    - name: laserreporting-page
+      kind: http
+      base: https://laserreporting.molapps.net
+      contract: "GET /charting?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD (page); GET /getCombinedData, /getLaserData, /getNitrogenTelemetry (JSON); POST /enumerateXML (API_SECRET)"
+      stability: prototype
+      consumed_by: [people in a browser]
+  epicor: []

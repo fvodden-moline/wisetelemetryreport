@@ -5,7 +5,7 @@ XML_MOUNT=/mnt/laser_report
 
 # Fail early with a clear message rather than a docker error at the last step
 if [ ! -f .env ]; then
-  echo "error: .env not found. Copy .env.default to .env and fill it in." >&2
+  echo "error: .env not found. Create .env from .env.schema and fill it in." >&2
   exit 1
 fi
 

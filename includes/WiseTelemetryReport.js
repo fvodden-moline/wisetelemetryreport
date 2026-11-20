@@ -1,12 +1,13 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const XLSX = require('xlsx');
+const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
+const XLSX = require('xlsx');
 const axios = require('axios').default;
 const { DateTime } = require('luxon');
 
-const dotenv = require('dotenv');
-dotenv.config();
+const PORTAL = 'https://portal.wisetelemetry.com';
 
 class WiseTelemetryReport {
   constructor(username, password) {
@@ -15,109 +16,89 @@ class WiseTelemetryReport {
   }
 
   async login() {
+    if (!this.username || !this.password) {
+      throw new Error('WISE Telemetry sign-in not configured (WISE_TELEMETRY_USERNAME / WISE_TELEMETRY_PASSWORD missing)');
+    }
+    // Chromium's own sandbox needs user namespaces, which Docker's default seccomp profile does not
+    // allow for a non-root user, so it runs without it. It only ever opens the WISE portal login page.
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--disable-gpu', '--disable-dev-shm-usage', '--disable-setuid-sandbox', '--no-sandbox'],
+    });
     try {
-
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: [
-	  "--disable-gpu",
-	  "--disable-dev-shm-usage",
-	  "--disable-setuid-sandbox",
-	  "--no-sandbox"
-        ]
-      });
       const page = await browser.newPage();
-      await page.goto('https://portal.wisetelemetry.com/login');
+      await page.goto(`${PORTAL}/login`);
+      await page.type('input[name="username"]', this.username);
+      await page.type('input[name="password"]', this.password);
 
-      await page.type('input[name="username', this.username);
-      await page.type('input[name="password', this.password);
-
-      console.info(`Logging in as ${this.username}...`)
+      console.info('Signing in to the WISE Telemetry portal...');
       await Promise.all([
         page.waitForNavigation(),
         page.click('input[type="submit"]'),
       ]);
-
-      const cookies = await page.cookies();
+      if (/\/login\b/.test(page.url())) {
+        throw new Error('WISE Telemetry sign-in refused (still on the login page; check the username and password in Hub)');
+      }
+      return await page.cookies();
+    } finally {
       await browser.close();
-
-      return cookies;
-    } catch (error) {
-      console.error(error);
-    
-      return null;
     }
   }
 
   async downloadExcel(customer_id, device_id, start_date, end_date, cookies) {
     start_date = DateTime.fromFormat(start_date, 'yyyy-MM-dd').toFormat('MM/dd/yyyy');
     end_date = DateTime.fromFormat(end_date, 'yyyy-MM-dd').toFormat('MM/dd/yyyy');
-    
-    const url = `https://portal.wisetelemetry.com/download/device/excel/condensed?customer_id=${customer_id}&device_id=${device_id}&start_date=${encodeURIComponent(
+
+    const url = `${PORTAL}/download/device/excel/condensed?customer_id=${encodeURIComponent(customer_id)}&device_id=${encodeURIComponent(device_id)}&start_date=${encodeURIComponent(
       start_date
     )}&end_date=${encodeURIComponent(end_date)}`;
 
-    console.info(`Downloading XLSX at ${url}...`)
+    // account and device ids are Hub entries: keep them out of the log
+    console.info(`Downloading the WISE Telemetry report for ${start_date} to ${end_date}...`);
 
     const cookieString = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
-
     const response = await axios.get(url, {
-      headers: {
-        Cookie: cookieString,
-      },
+      headers: { Cookie: cookieString },
       responseType: 'arraybuffer',
     });
 
-    const filePath = path.resolve(__dirname, 'report.xlsx');
-    fs.writeFileSync(filePath, response.data);
+    const data = Buffer.from(response.data);
+    // an .xlsx file is a zip archive; anything else is the portal answering with a page instead
+    if (data.length < 4 || data.toString('latin1', 0, 2) !== 'PK') {
+      throw new Error('WISE Telemetry report download did not return a spreadsheet (check the account and device ids in Hub)');
+    }
 
+    const filePath = path.join(os.tmpdir(), `wise-report-${process.pid}-${crypto.randomUUID()}.xlsx`);
+    fs.writeFileSync(filePath, data);
     return filePath;
   }
 
   parseExcel(filePath) {
-    const workbook = XLSX.readFile(filePath);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet);
-  
-    const formatDate = (timestamp) => {
-      const date = DateTime.fromSeconds(timestamp);
-      return date.toFormat('yyyy-MM-dd');
-    };
+    try {
+      const workbook = XLSX.readFile(filePath);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
 
-    const result = json.map((row, index) => {
-      const prevRow = index > 0 ? json[index - 1] : null;
-      const date = formatDate(row.Timestamp);
-      return {
-        date: date,
-        tank_level: row['Channel 1 (in)'],
-        delta: prevRow ? row['Channel 1 (in)'] - prevRow['Channel 1 (in)'] : null,
-      };
-    });
-  
-    fs.unlinkSync(filePath);
-  
-    return result;
+      const formatDate = (timestamp) => DateTime.fromSeconds(timestamp).toFormat('yyyy-MM-dd');
+
+      return json.map((row, index) => {
+        const prevRow = index > 0 ? json[index - 1] : null;
+        return {
+          date: formatDate(row.Timestamp),
+          tank_level: row['Channel 1 (in)'],
+          delta: prevRow ? row['Channel 1 (in)'] - prevRow['Channel 1 (in)'] : null,
+        };
+      });
+    } finally {
+      fs.rmSync(filePath, { force: true });
+    }
   }
 
   async generateReport(customer_id, device_id, start_date, end_date) {
     const cookies = await this.login();
     const filePath = await this.downloadExcel(customer_id, device_id, start_date, end_date, cookies);
-    const report = this.parseExcel(filePath);
-    return report;
+    return this.parseExcel(filePath);
   }
 }
 
 module.exports = WiseTelemetryReport;
-
-// (async () => {
-//   const reportGenerator = new WiseTelemetryReport(process.env.WISE_TELEMETRY_USERNAME, process.env.WISE_TELEMETRY_PASSWORD);
-//   const report = await reportGenerator.generateReport(
-//     process.env.WISE_TELEMETRY_ACCOUNT_ID, // Customer ID.
-//     process.env.WISE_TELEMETRY_DEVICE_ID, // Device ID.
-//     '04/01/2023',
-//     '04/30/2023'
-//   );
-
-//   console.log(report);
-// })();
-

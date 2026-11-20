@@ -17,6 +17,9 @@
 <body>
   <div class="container">
     <h1 class="is-size-2">Nitrogen Use Analysis</h1>
+    <% (typeof notices !== 'undefined' ? notices : []).forEach(function (notice) { %>
+    <div class="notification is-warning is-light mt-3"><%= notice %></div>
+    <% }); %>
     
     <section class="section">
       <div class="container">
