@@ -27,6 +27,7 @@ class WiseTelemetryReport {
     });
     try {
       const page = await browser.newPage();
+      page.setDefaultTimeout(20000);
       await page.goto(`${PORTAL}/login`);
       await page.type('input[name="username"]', this.username);
       await page.type('input[name="password"]', this.password);
@@ -60,6 +61,7 @@ class WiseTelemetryReport {
     const response = await axios.get(url, {
       headers: { Cookie: cookieString },
       responseType: 'arraybuffer',
+      timeout: 30000,
     });
 
     const data = Buffer.from(response.data);
